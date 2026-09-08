@@ -1,0 +1,29 @@
+name = "simpsons-chatbot"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+# Workers AI — used to generate embeddings for retrieval (RAG)
+[ai]
+binding = "AI"
+
+# D1 — durable record of every entry (source of truth, used to re-embed if needed)
+[[d1_databases]]
+binding = "DB"
+database_name = "simpsons-db"
+database_id = "edbee54f-55c3-4afa-9720-bf8704c34e0e"
+
+# Vectorize — semantic search index over entry text
+# NOTE: not yet created — the connected Cloudflare MCP tools don't cover Vectorize.
+# Run: wrangler vectorize create simpsons-index --dimensions=768 --metric=cosine
+[[vectorize]]
+binding = "VECTORIZE_INDEX"
+index_name = "simpsons-index"
+
+# KV — lightweight per-IP rate limiting so the endpoint can't be hammered
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "b571b449d38b4ef386ab5246e3374e15"
+
+# Secrets (do NOT put these here — set via `wrangler secret put`):
+#   ANTHROPIC_API_KEY  — your Anthropic API key
+#   INGEST_SECRET      — a password you make up, required to call /api/ingest
