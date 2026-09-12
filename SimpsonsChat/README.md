@@ -5,7 +5,7 @@ A conversational AI that accurately answers questions across an 801-episode,
 generation (RAG) pipeline, using *The Simpsons* as the test case for
 retrieval accuracy at scale.
 
-**[Live demo](#)** — swap in your deployed frontend URL
+**[Live website](https://www.simpsons.chat)** — swap in your deployed frontend URL
 
 ## What it does
 
