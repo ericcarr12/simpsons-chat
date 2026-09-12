@@ -1,11 +1,11 @@
-# Ask Springfield — Episode & Character Knowledge Chatbot
+# Simpsons.chat — Episode & Character Knowledge Chatbot
 
 A conversational AI that accurately answers questions across an 801-episode,
 2,820-character knowledge base — built as a full retrieval-augmented
 generation (RAG) pipeline, using *The Simpsons* as the test case for
 retrieval accuracy at scale.
 
-**[Live demo](#)** — swap in your deployed frontend URL
+**[Live website](https://www.simpsons.chat)** — swap in your deployed frontend URL
 
 ## What it does
 
