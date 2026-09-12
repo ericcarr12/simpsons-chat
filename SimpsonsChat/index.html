@@ -18,10 +18,7 @@
   body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background: 
-      url('images/bg-left.jpg') left / auto 100% no-repeat fixed,
-      url('images/bg-right.jpg') right / auto 100% no-repeat fixed,
-      var(--background-blue);
+    background: var(--background-blue) url('simpsons-backend/images/background.jpg') center/cover no-repeat;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -32,8 +29,8 @@
   header {
     text-align: left;
     margin-bottom: 24px;
-    max-width: 640px;
-    width: 100%;
+    max-width:640px;
+    width:100%;
     display: flex;
     align-items: center;
     gap:16px;
@@ -41,7 +38,7 @@
   header h1 {
     font-size: 2rem;
     color: var(--white);
-    text-shadow: 2px 2px 2px var(--black);
+    text-shadow: 2px 2px 0 var(--black);
     margin: 16px 0 0 0;
     letter-spacing: 1px;
   }
@@ -49,10 +46,20 @@
     color: #fff;
     font-size: 1.5rem;
     margin: 6px 0 0;
-    text-shadow: 2px 2px 2px var(--black);
   }
   .logo {
     width:180px;
+  }
+  .disclaimer {
+    max-width: 640px;
+    text-align: left;
+    font-size: 0.8rem;
+    color: var(--dark);
+    background-color: white;
+    border-radius: 8px;
+    border: solid 1px black;
+    padding: 16px;
+    margin: 24px 0;
   }
   .chat-card {
     width: 100%;
@@ -67,7 +74,7 @@
   }
   .chat-header {
     background: var(--simpsons-pink);
-    padding: 12px 16px;
+    padding: 10px 16px;
     font-weight: 700;
     border-bottom: 3px solid var(--dark);
     display: flex;
@@ -159,39 +166,34 @@
   .suggestions button:hover { transform:scale(1.05); background: white; }
   footer {
     max-width: 640px;
+    text-align: left;
     font-size: 0.8rem;
     color: var(--black);
     background-color: var(--simpsons-pink);
     border-radius: 8px;
-    padding: 12px 16px;
+    border: solid 1px black;
+    padding: 16px;
     margin-top: 32px;
   }
   @media screen and (max-width: 640px) {
     .mobile-hide { display:none; }
     .logo { width: 120px; }
     header h1 { font-size:1.5em; margin:0; }
-    header p { font-size:1em; }
-    body { justify-content: flex-start; background-image: none; }
-  }
-  @media screen and (max-width: 480px) {
-    header h1 { font-size:1.2em; margin:12px 0 0 0; }
+    body { justify-content: flex-start; }
   }
 </style>
 </head>
 <body>
 <header>
-  <img src="images/logo.svg" class="logo"/>
-    <div>
-      <h1>Unofficial Fan Chat</h1>
-      <p>Unofficial Fan Chat</p>
-    </div>
+  <img src="simpsons-backend/images/logo.svg" class="logo"/>
+  <h1>Unofficial Fan Chat</h1>
 </header>
 
 <div class="chat-card">
   <div class="chat-header"><span class="mobile-hide">🍩&nbsp;🍩&nbsp;🍩&nbsp;&nbsp;</span>Ask me about characters, episodes, or Springfield trivia<span class="mobile-hide">&nbsp;&nbsp;🍩&nbsp;🍩&nbsp;🍩</span></div>
   <div class="chat-log" id="chatLog"></div>
   <form class="chat-input" id="chatForm">
-    <input type="text" id="chatInput" placeholder="Enter your question here &lpar;e.g. Who is Ned Flanders?&rpar;" autocomplete="on" />
+    <input type="text" id="chatInput" placeholder="e.g. Who is Ned Flanders?" autocomplete="on" />
     <button type="submit">Send</button>
   </form>
 </div>
@@ -215,6 +217,8 @@
 
 <script>
 // ---------- Backend (Cloudflare Worker RAG chat) ----------
+// Set this to your deployed Worker URL (see simpsons-backend/README.md) to enable
+// real LLM-powered free-form chat. Leave empty to use only the client-side lookups below.
 const BACKEND_URL = "https://simpsons-chatbot.erccrr.workers.dev";
 
 async function backendLookup(query) {
@@ -401,14 +405,49 @@ const chatLog = document.getElementById("chatLog");
 const chatForm = document.getElementById("chatForm");
 const chatInput = document.getElementById("chatInput");
 
-function addBubble(text, who, srcHtml) {
+// Only allow http(s) URLs to become real links — blocks javascript:, data:, etc.
+// in case any upstream source (wiki APIs, backend dataset) ever contains a bad URL.
+function safeUrl(u) {
+  if (!u) return null;
+  try {
+    const parsed = new URL(u, window.location.href);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") return parsed.href;
+  } catch (e) {}
+  return null;
+}
+
+// sourceInfo is a plain-data description of the "Source:" line, never raw HTML —
+// this is built entirely with createElement/textContent so titles or URLs coming
+// from third-party APIs (Fandom, Wikipedia) or the dataset can't inject markup.
+function addBubble(text, who, sourceInfo) {
   const div = document.createElement("div");
   div.className = "bubble " + who;
   div.textContent = text;
-  if (srcHtml) {
+  if (sourceInfo) {
     const src = document.createElement("span");
     src.className = "src";
-    src.innerHTML = srcHtml;
+    if (sourceInfo.label) {
+      src.appendChild(document.createTextNode(sourceInfo.label + " "));
+    }
+    if (Array.isArray(sourceInfo.links) && sourceInfo.links.length > 0) {
+      sourceInfo.links.forEach((link, i) => {
+        if (i > 0) src.appendChild(document.createTextNode(", "));
+        const label = link.title || link.url || "source";
+        const url = safeUrl(link.url);
+        if (url) {
+          const a = document.createElement("a");
+          a.href = url;
+          a.target = "_blank";
+          a.rel = "noopener";
+          a.textContent = label;
+          src.appendChild(a);
+        } else {
+          src.appendChild(document.createTextNode(label));
+        }
+      });
+    } else if (sourceInfo.text) {
+      src.appendChild(document.createTextNode(sourceInfo.text));
+    }
     div.appendChild(src);
   }
   chatLog.appendChild(div);
@@ -425,11 +464,12 @@ async function handleQuery(query) {
       const backend = await backendLookup(query);
       if (backend && backend.answer && !backend.noMatch) {
         typing.remove();
-        const srcHtml = (backend.sources || [])
+        const links = (backend.sources || [])
           .filter((s) => s && s.title)
-          .map((s) => (s.url ? '<a href="' + s.url + '" target="_blank" rel="noopener">' + s.title + "</a>" : s.title))
-          .join(", ");
-        addBubble(backend.answer, "bot", srcHtml ? "Sources: " + srcHtml : "Source: Simpsons chatbot backend");
+          .map((s) => ({ title: s.title, url: s.url }));
+        addBubble(backend.answer, "bot", links.length
+          ? { label: "Sources:", links }
+          : { text: "Source: Simpsons chatbot backend" });
         return;
       }
       // backend.noMatch === true means the curated dataset had nothing relevant —
@@ -442,7 +482,7 @@ async function handleQuery(query) {
   const local = localLookup(query);
   if (local) {
     typing.remove();
-    addBubble(local.text, "bot", "Source: curated fan-site dataset (" + local.title + ")");
+    addBubble(local.text, "bot", { text: "Source: curated fan-site dataset (" + local.title + ")" });
     return;
   }
 
@@ -450,8 +490,10 @@ async function handleQuery(query) {
     const fandom = await fandomLookup(query);
     if (fandom) {
       typing.remove();
-      addBubble(fandom.text, "bot", 'Source: <a href="' + fandom.url + '" target="_blank" rel="noopener">' +
-        fandom.source + " — " + fandom.title + "</a>");
+      addBubble(fandom.text, "bot", {
+        label: "Source:",
+        links: [{ title: fandom.source + " — " + fandom.title, url: fandom.url }]
+      });
       return;
     }
   } catch (e) {
@@ -462,7 +504,10 @@ async function handleQuery(query) {
     const wiki = await wikipediaLookup(query);
     typing.remove();
     if (wiki) {
-      addBubble(wiki.text, "bot", 'Source: <a href="' + wiki.url + '" target="_blank" rel="noopener">Wikipedia — ' + wiki.title + "</a>");
+      addBubble(wiki.text, "bot", {
+        label: "Source:",
+        links: [{ title: "Wikipedia — " + wiki.title, url: wiki.url }]
+      });
     } else {
       addBubble("D'oh! I couldn't find anything about that in Springfield's records. Try asking about a specific character or episode.", "bot");
     }
