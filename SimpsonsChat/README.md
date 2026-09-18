@@ -1,69 +1,69 @@
-# Simpsons.chat — Episode & Character Knowledge Chatbot
+# Ask Springfield — A Simpsons Trivia Chatbot
 
-A conversational AI that accurately answers questions across an 801-episode,
-2,820-character knowledge base — built as a full retrieval-augmented
-generation (RAG) pipeline, using *The Simpsons* as the test case for
-retrieval accuracy at scale.
+**Live:** https://www.simpsons.chat
 
-**[Live website](https://www.simpsons.chat)** — swap in your deployed frontend URL
+A fan-made chatbot that answers questions about The Simpsons — characters,
+episodes, and Springfield trivia — grounded in a purpose-built knowledge base
+rather than general model knowledge, with live wiki fallbacks for anything
+outside that dataset.
 
-## What it does
+## How it works
 
-Ask it about any character, episode, or moment from the show's run — down to
-individual *Treehouse of Horror* segments, searchable by roman numeral or
-plain number — and it answers conversationally, citing its sources, without
-inventing plot details it can't back up.
+1. A question is embedded and matched against a Vectorize index of curated
+   and Wikisimpsons-sourced entries.
+2. The retrieved context is passed to Claude, which is instructed to answer
+   using *only* that context — reducing hallucination on a subject where
+   getting details wrong is easy to spot.
+3. If nothing relevant is found, the frontend falls back to a small built-in
+   dataset for the core cast, then live lookups against the Simpsons Wiki
+   (Fandom) and Wikipedia APIs.
 
-## Why it's more than a chatbot wrapper
+The whole pipeline — embeddings, vector search, rate limiting, and
+generation — runs serverless on Cloudflare (Workers, Workers AI, Vectorize,
+D1, KV) plus the Anthropic API.
 
-Most "AI chatbot" side projects are a thin UI over a general-purpose model.
-This one is grounded: the model is only allowed to answer from facts it
-actually retrieved for that specific question, and it says so when it can't
-find anything rather than guessing.
-
-## Architecture
+## Repo structure
 
 ```
-Browser (index.html)
-   │  POST /api/chat { message }
-   ▼
-Cloudflare Worker (simpsons-backend/src/index.js)
-   │
-   ├─ 1. Embed the question — Workers AI (bge-base-en-v1.5, 768-dim)
-   ├─ 2. Vector search — Vectorize, top-3 most relevant entries
-   ├─ 3. Generate — Claude answers using ONLY the retrieved context
-   ├─ 4. D1 — durable source-of-truth store for every entry
-   └─ 5. KV — per-IP rate limiting (30 req/hour)
+index.html            Frontend — single self-contained static HTML file
+                       (depends on an images/ folder not included here; see
+                       simpsons-backend/README.md for the asset list)
+simpsons-backend/      Cloudflare Worker backend (RAG API), dataset,
+                       ingestion scripts, and deployment instructions —
+                       see simpsons-backend/README.md
 ```
 
-If the backend can't find a confident match, the frontend falls through to a
-live Simpsons Wiki (Fandom) lookup, then Wikipedia — so a question never just
-dead-ends.
+## Dataset
 
-## The dataset
+~3,833 entries covering every season's episodes (including Treehouse of
+Horror segments as individual entries) and several hundred characters,
+built from Wikisimpsons via a scrape-and-enrich pipeline, plus a small
+hand-curated set for the core cast and frequently-asked facts. See
+`simpsons-backend/README.md` for how the dataset is loaded and extended.
 
-The knowledge base was built with a custom enrichment pipeline
-(`simpsons-backend/simpsons_enrichment_pipeline.py`) that pulls raw wikitext
-for every episode and character page and processes it at scale using
-**Anthropic's Message Batches API**, plus a dedicated crawler
-(`scripts/scrape-characters.js`) that walks Wikisimpsons' full character
-category (~9,700 pages).
+## Accessibility
 
-Final scale:
-- 801 episodes
-- 2,820 characters
-- 3,754 total indexed entries (including per-segment anthology entries)
+The frontend has been audited and patched against WCAG 2.1 AA (labeled
+controls, live-region announcements for new chat messages, visible focus
+states, compliant color contrast) plus one AAA-level enhancement (44px
+minimum touch targets).
 
-## Stack
+## License and attribution
 
-Cloudflare Workers · Workers AI · Vectorize · D1 · KV · Anthropic Claude API
-· vanilla HTML/CSS/JS frontend
+Fan-made project — not affiliated with, endorsed by, or sponsored by Fox,
+Disney, or Matt Groening. The Simpsons, its characters, and all related
+indicia are trademarks and/or copyrights of Fox and its related entities.
 
-## Setup
+Character and episode data is adapted from the Simpsons Wiki (Fandom),
+licensed under [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/),
+and from Wikipedia, licensed under
+[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). Both
+sources' text remains © their respective contributors.
 
-See [`simpsons-backend/README.md`](./simpsons-backend/README.md) for full
-deployment steps (Wrangler config, secrets, ingesting the dataset).
+Site design, code, and original write-ups © 2026 Oxygen For Aliens LLC.
 
----
-*Fan-made — not affiliated with or endorsed by Disney/Fox. Built as a
-technical exploration of retrieval-grounded chat at scale.*
+## Deploying your own copy
+
+See [`simpsons-backend/README.md`](simpsons-backend/README.md) for the full
+backend setup (Cloudflare bindings, secrets, deploy, dataset ingestion) and
+frontend deployment notes.
