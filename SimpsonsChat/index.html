@@ -3,7 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ask Springfield — A Simpsons Fan Chatbot</title>
+<title>Ask me about The Simpsons — Trivia Chatbot</title>
+<link rel="icon" type="image/x-icon" href="images/donut.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,200;0,300;0,500;0,600;0,700;1,200;1,500&display=swap" rel="stylesheet">
 <style>
   :root {
     --simpsons-yellow: #FFD90F;
@@ -18,7 +22,10 @@
   body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background: var(--background-blue) url('simpsons-backend/images/background.jpg') center/cover no-repeat;
+    background:
+      url('images/bg-left.jpg') left / auto 100% no-repeat fixed,
+      url('images/bg-right.jpg') right / auto 100% no-repeat fixed,
+      var(--background-blue);
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -27,39 +34,30 @@
     padding: 16px;
   }
   header {
-    text-align: left;
-    margin-bottom: 24px;
-    max-width:640px;
-    width:100%;
+    max-width: 640px;
+    width: 100%;
     display: flex;
     align-items: center;
-    gap:16px;
+    justify-content: flex-start;
+    gap:12px;
   }
   header h1 {
     font-size: 2rem;
-    color: var(--white);
-    text-shadow: 2px 2px 0 var(--black);
-    margin: 16px 0 0 0;
+    font-weight:600;
+    color: var(--black);
+    margin: 0;
     letter-spacing: 1px;
+    white-space: nowrap;
   }
   header p {
-    color: #fff;
-    font-size: 1.5rem;
+    color: var(--black);
+    font-size: 1.1rem;
     margin: 6px 0 0;
+    font-weight: 500;
+    white-space: nowrap;
   }
   .logo {
-    width:180px;
-  }
-  .disclaimer {
-    max-width: 640px;
-    text-align: left;
-    font-size: 0.8rem;
-    color: var(--dark);
-    background-color: white;
-    border-radius: 8px;
-    border: solid 1px black;
-    padding: 16px;
-    margin: 24px 0;
+    width: 148px;
   }
   .chat-card {
     width: 100%;
@@ -74,13 +72,10 @@
   }
   .chat-header {
     background: var(--simpsons-pink);
-    padding: 10px 16px;
-    font-weight: 700;
     border-bottom: 3px solid var(--dark);
     display: flex;
-    align-items: center;
+    flex-direction: column;
     justify-content: center;
-    gap: 8px;
   }
   .chat-log {
     flex: 1;
@@ -117,12 +112,10 @@
     display: block;
     margin-top: 6px;
     font-size: 0.75rem;
-    opacity: 0.75;
   }
   .bubble .src a { color: inherit; }
   .typing {
     font-style: italic;
-    opacity: 0.7;
   }
   form.chat-input {
     display: flex;
@@ -133,7 +126,10 @@
     border: none;
     padding: 14px;
     font-size: 1rem;
-    outline: none;
+  }
+  form.chat-input input:focus-visible {
+    outline: 3px solid var(--simpsons-blue);
+    outline-offset: -2px;
   }
   form.chat-input button {
     border: none;
@@ -162,40 +158,78 @@
     font-size: 0.85rem;
     cursor: pointer;
     box-shadow: 0 4px 4px #00000025;
+    /* WCAG 2.5.5 (AAA) target size — guarantee 44px height regardless of line-height */
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
   }
   .suggestions button:hover { transform:scale(1.05); background: white; }
   footer {
     max-width: 640px;
-    text-align: left;
     font-size: 0.8rem;
     color: var(--black);
     background-color: var(--simpsons-pink);
     border-radius: 8px;
-    border: solid 1px black;
-    padding: 16px;
+    padding: 12px 16px;
     margin-top: 32px;
   }
+  /* Default browser link blue only hits ~4.1:1 on this pink background (needs 4.5:1) —
+     use the dark palette color plus an underline so it isn't color-only either. */
+  footer a {
+    color: var(--dark);
+    text-decoration: underline;
+  }
+
+  .comic-book-guy {
+    display:flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    width:100%;
+    padding:8px 8px 0 0;
+    gap:0;
+  }
+
+  .pad8 {padding:8px;}
+  .title { display:flex; gap:8px; padding:16px; }
+
+  @media screen and (max-width: 560px) { .comic-book-guy { display:none;} }
   @media screen and (max-width: 640px) {
     .mobile-hide { display:none; }
     .logo { width: 120px; }
-    header h1 { font-size:1.5em; margin:0; }
-    body { justify-content: flex-start; }
+    header h1 { font-size:1.4em; margin:0; }
+    header p { font-size:0.8em; }
+    body { justify-content: flex-start; background-image: none; padding:8px; }
   }
 </style>
 </head>
 <body>
-<header>
-  <img src="simpsons-backend/images/logo.svg" class="logo"/>
-  <h1>Unofficial Fan Chat</h1>
-</header>
-
+<div class="pad8">
+  <img src="images/promo.jpg" width="240" alt="Sept 27 on Fox. Next day on Hulu.">
+</div>
 <div class="chat-card">
-  <div class="chat-header"><span class="mobile-hide">🍩&nbsp;🍩&nbsp;🍩&nbsp;&nbsp;</span>Ask me about characters, episodes, or Springfield trivia<span class="mobile-hide">&nbsp;&nbsp;🍩&nbsp;🍩&nbsp;🍩</span></div>
-  <div class="chat-log" id="chatLog"></div>
-  <form class="chat-input" id="chatForm">
-    <input type="text" id="chatInput" placeholder="e.g. Who is Ned Flanders?" autocomplete="on" />
-    <button type="submit">Send</button>
-  </form>
+  <div class="chat-header">
+    <header>
+      <div class="title">
+        <div>
+          <h1>Ask me about</h1>
+          <p>Unofficial Trivia Chatbot</p>
+        </div>
+        <img src="images/logo.svg" class="logo" alt="The Simpsons"/>
+      </div>
+      <div class="comic-book-guy">
+        <img src="images/speech1.svg" alt="" />
+        <img src="images/comicbookguy.svg" width="96" alt="" />
+      </div>
+    </header>
+    <!--
+    <div>Ask me about characters, episodes, or Springfield trivia<span class="mobile-hide">&nbsp;&nbsp;🍩&nbsp;🍩&nbsp;🍩</span></div>
+    -->
+  </div>
+  <div class="chat-log" id="chatLog" role="log" aria-live="polite" aria-relevant="additions"></div>
+    <form class="chat-input" id="chatForm">
+      <input type="text" id="chatInput" placeholder="Enter your question here &lpar;e.g. Who is Ned Flanders?&rpar;" autocomplete="on" aria-label="Ask a question about the Simpsons" />
+      <button type="submit">Send</button>
+    </form>
 </div>
 
 <div class="suggestions" id="suggestions">
@@ -207,18 +241,20 @@
 </div>
 
 <footer>
-  Fan-made project, not affiliated with or endorsed by Fox, Disney, or Matt Groening.
-  Answers are drawn from a small curated dataset, plus live lookups on the Simpsons Wiki (Fandom)
-  and Wikipedia as a fallback. 
-  Built as a fan project. Character data: small curated set + live lookups on
-  <a href="https://simpsons.fandom.com" target="_blank" rel="noopener">Simpsons Wiki (Fandom)</a> and
-  <a href="https://en.wikipedia.org" target="_blank" rel="noopener">Wikipedia</a>, both CC BY-SA.
+  <p style="margin:0 0 8px;">Fan-made project — not affiliated with, endorsed by, or sponsored by Fox, Disney, or Matt Groening. The Simpsons, its characters, and all related indicia are trademarks and/or copyrights of Fox and its related entities.</p>
+  <p style="margin:0 0 8px;">Answers are drawn from a small curated dataset, plus live lookups on the
+    <a href="https://simpsons.fandom.com" target="_blank" rel="noopener">Simpsons Wiki (Fandom)</a> and
+    <a href="https://en.wikipedia.org" target="_blank" rel="noopener">Wikipedia</a>.
+    Text from Simpsons Wiki is © its contributors, licensed under
+    <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener">CC BY-SA 3.0</a>;
+    text from Wikipedia is © its contributors, licensed under
+    <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>.
+    Some entries have been adapted or summarized from these sources.</p>
+  <p style="margin:0;">Site design, code, and original write-ups ©2026 Oxygen For Aliens LLC.</p>
 </footer>
 
 <script>
 // ---------- Backend (Cloudflare Worker RAG chat) ----------
-// Set this to your deployed Worker URL (see simpsons-backend/README.md) to enable
-// real LLM-powered free-form chat. Leave empty to use only the client-side lookups below.
 const BACKEND_URL = "https://simpsons-chatbot.erccrr.workers.dev";
 
 async function backendLookup(query) {
