@@ -9,18 +9,24 @@ outside that dataset.
 
 ## How it works
 
-1. A question is embedded and matched against a Vectorize index of curated
-   and Wikisimpsons-sourced entries.
-2. The retrieved context is passed to Claude, which is instructed to answer
+1. Before anything else, the question is checked against a set of
+   deterministic, hand-coded answer paths: producer/writer credits, "which
+   episodes feature X" / "how many episodes has X been in" character
+   lookups, and a small library of memorable-quote triggers. These exist
+   because for complete-list and well-known-fact questions, an exact,
+   grounded answer beats an approximate one pulled from semantic search.
+2. If none of those match, the question is embedded and matched against a
+   Vectorize index of curated and Wikisimpsons-sourced entries.
+3. The retrieved context is passed to Claude, which is instructed to answer
    using *only* that context — reducing hallucination on a subject where
    getting details wrong is easy to spot.
-3. If nothing relevant is found, the frontend falls back to a small built-in
+4. If nothing relevant is found, the frontend falls back to a small built-in
    dataset for the core cast, then live lookups against the Simpsons Wiki
    (Fandom) and Wikipedia APIs.
 
-The whole pipeline — embeddings, vector search, rate limiting, and
-generation — runs serverless on Cloudflare (Workers, Workers AI, Vectorize,
-D1, KV) plus the Anthropic API.
+The whole pipeline — embeddings, vector search, deterministic lookups, rate
+limiting, and generation — runs serverless on Cloudflare (Workers, Workers
+AI, Vectorize, D1, KV) plus the Anthropic API.
 
 ## Repo structure
 
@@ -28,18 +34,24 @@ D1, KV) plus the Anthropic API.
 index.html            Frontend — single self-contained static HTML file
                        (depends on an images/ folder not included here; see
                        simpsons-backend/README.md for the asset list)
-simpsons-backend/      Cloudflare Worker backend (RAG API), dataset,
-                       ingestion scripts, and deployment instructions —
-                       see simpsons-backend/README.md
+simpsons-backend/      Cloudflare Worker backend (RAG + deterministic
+                       lookups), dataset, ingestion scripts, and deployment
+                       instructions — see simpsons-backend/README.md
 ```
 
 ## Dataset
 
-~3,833 entries covering every season's episodes (including Treehouse of
-Horror segments as individual entries) and several hundred characters,
-built from Wikisimpsons via a scrape-and-enrich pipeline, plus a small
-hand-curated set for the core cast and frequently-asked facts. See
-`simpsons-backend/README.md` for how the dataset is loaded and extended.
+~3,833 semantic-search entries covering every season's episodes (including
+Treehouse of Horror segments as individual entries) and several hundred
+characters, built from Wikisimpsons via a scrape-and-enrich pipeline, plus a
+small hand-curated set for the core cast and frequently-asked facts.
+
+Alongside that, D1 tracks structured producer credits and character
+appearances for all **809** broadcast episodes, which power the exact-answer
+lookups described above (complete producer/writer lists, full "which
+episodes feature X" results, and curated episode-count write-ups for Homer,
+Marge, Bart, Lisa, and Maggie). See `simpsons-backend/README.md` for how the
+dataset is loaded, structured, and extended.
 
 ## Accessibility
 
