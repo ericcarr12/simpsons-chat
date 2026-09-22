@@ -2,7 +2,9 @@
 
 A Cloudflare Worker that powers a fan-made Simpsons trivia chatbot: it embeds
 the incoming question, searches a Vectorize index for the most relevant
-facts, and asks Claude to answer using only that retrieved context.
+facts, and asks Claude to answer using only that retrieved context —
+falling back to that only after checking a handful of deterministic,
+hand-coded answer paths first.
 
 **Live site:** https://www.simpsons.chat
 **Worker URL:** https://simpsons-chatbot.erccrr.workers.dev
@@ -20,26 +22,72 @@ redeploying, extending, or forking this.
 - **Vectorize** (`simpsons-index`): semantic search over the embedded
   entries.
 - **D1** (`simpsons-db`, id `edbee54f-55c3-4afa-9720-bf8704c34e0e`): durable
-  source-of-truth copy of every entry (title/text/source/url), so the dataset
-  can be inspected, edited, or re-embedded without touching Vectorize
-  directly.
+  source-of-truth copy of every entry (title/text/source/url), plus two
+  structured tables — `episode_producers` and `episode_characters` — that
+  drive the deterministic lookups described below. The `entries` table can
+  be inspected, edited, or re-embedded without touching Vectorize directly.
 - **KV** (`simpsons-chatbot-rate-limit`, id `b571b449d38b4ef386ab5246e3374e15`):
   per-IP rate limiting on `/api/chat`.
 - **Claude** (`claude-haiku-4-5`): answers strictly from the retrieved
   context — the system prompt explicitly forbids using outside knowledge, to
   keep answers grounded and reduce hallucination.
 
+## Deterministic lookups (`src/index.js`)
+
+Before any question reaches embedding + Vectorize + Claude, `handleChat`
+checks three fast, DB-free or DB-backed paths in order. These exist because
+"complete list" and well-known-fact questions are exactly where semantic
+search + an LLM is prone to give an incomplete or hallucinated answer:
+
+1. **Memorable quotes** (`tryMemorableQuoteLookup`) — a small curated array
+   (`MEMORABLE_QUOTES`) of well-known lines fans are likely to type
+   verbatim or paraphrase ("Why was I programmed to feel pain?", "I need
+   tungsten to live", "Save me, Jebus", the cursed Frogurt exchange, "Well,
+   my work here is done." / "Didn't I?"). Matching is done on a normalized
+   (lowercased, punctuation-stripped) version of the message; most entries
+   match on substring containment, but short/generic trigger phrases are
+   flagged `exact: true` to require the whole normalized message to match,
+   avoiding false positives inside unrelated sentences. Add new quotes by
+   appending to `MEMORABLE_QUOTES`.
+2. **Producer/writer credits** (`tryProducerLookup`) — answers "who wrote/
+   produced/directed X" and "what did \<person\> work on" style questions
+   from the `episode_producers` table, so the answer is a complete,
+   grounded list rather than a top-K approximation.
+3. **Character episode lookups** (`tryCharacterEpisodesLookup`) — answers
+   "which episodes feature X" and "how many episodes has X been in" from
+   the `episode_characters` table. Character name resolution
+   (`findCharacterName`) does word-boundary-aware fuzzy matching so bare
+   first names ("Homer", "Marge") resolve to the right full name rather
+   than a same-named minor character, with `MAIN_CHARACTER_FIRST_NAMES`
+   short-circuiting the five core family members directly.
+
+   For those same five main characters, the dynamic count/exception logic
+   is overridden by a curated, editorially-approved answer
+   (`MAIN_CHARACTER_EPISODE_ANSWERS`, one constant per character) rather
+   than the raw database count — the raw data has a handful of technical
+   edge cases (in-story alias renamings, anthology segments with no
+   named credit) that the site intentionally treats as non-exceptions for
+   trivia purposes. Update these constants directly in `src/index.js` if
+   the desired wording changes.
+
 ## Dataset
 
-D1 currently holds **~3,833 entries** — 3,777 sourced from Wikisimpsons
-(episodes across all seasons, including Treehouse of Horror segments as
-their own entries, plus several hundred characters) and 56 hand-curated
-entries for the core cast and frequently-asked facts. The episode and
+D1's `entries` table holds **~3,833** semantic-search entries — 3,777
+sourced from Wikisimpsons (episodes across all seasons, including Treehouse
+of Horror segments as their own entries, plus several hundred characters)
+and 56 hand-curated entries for the core cast and frequently-asked facts
+(including a detailed Conan O'Brien writer/producer bio). The episode and
 character data was built via wikitext scraping + parsing scripts
 (`scripts/scrape-characters.js` and the wikitext/infobox extraction
 pipeline, not included in this folder) followed by an Anthropic Message
 Batches API enrichment pass that generated quotes and longer summaries for
 each entry.
+
+Separately, `episode_producers` and `episode_characters` hold structured,
+per-episode producer credits and character appearances for all **809**
+broadcast episodes (reconciled against the current real episode count as of
+August 2026). These are what the deterministic lookups above query — not
+the `entries` table, and not Vectorize.
 
 ## Endpoints
 
@@ -49,6 +97,11 @@ each entry.
 | POST | `/api/chat` | none (IP rate-limited) | `{ message }` → `{ answer, sources, noMatch? }` |
 | POST | `/api/ingest` | `x-ingest-secret` header | `{ entries: [...] }` → upserts into D1 + Vectorize |
 | POST | `/api/admin/delete` | `x-ingest-secret` header | `{ ids: [...] }` → removes entries from both D1 and Vectorize by id |
+
+Note: `/api/ingest` and `/api/admin/delete` only touch the `entries` table
+and Vectorize. `episode_producers` and `episode_characters` are edited
+directly via D1 (`wrangler d1 execute` or the Cloudflare dashboard) — there's
+no dedicated endpoint for them yet.
 
 ## Prerequisites (for redeploying or forking)
 
@@ -89,6 +142,23 @@ wrangler deploy
 
 This prints your Worker's URL — update `BACKEND_URL` near the top of the
 `<script>` block in `index.html` to point at it.
+
+## Making a code change (deterministic lookups, quotes, etc.)
+
+Most day-to-day edits — adding a memorable quote, adjusting a curated
+character answer, tweaking a regex pattern — happen directly in
+`src/index.js`. The workflow:
+
+```bash
+node --check src/index.js   # quick syntax sanity check
+cd simpsons-backend         # must run from here, not a parent/other directory
+npx wrangler deploy
+```
+
+Look for `Success` in the output. If `wrangler` reports a filesystem
+permission error referencing an unrelated path (e.g. `~/.Trash`), it almost
+always means the command wasn't run from inside `simpsons-backend` — `cd`
+into it and retry rather than treating it as a Cloudflare quota issue.
 
 ## Loading the dataset
 
@@ -150,6 +220,15 @@ embedding calls and a few thousand Vectorize upserts. Check your Cloudflare
 Workers AI plan's daily neuron allowance first — if you hit a limit partway
 through, just re-run later; already-ingested ids get safely overwritten, not
 duplicated.
+
+**Known scraper limitation:** the wikitext parser that extracts a page's
+"Characters" section is not anchored to heading boundaries, so on episodes
+with multiple `=== Characters ===` sub-sections nested under segment
+headings (anthology episodes like Treehouse of Horror), it can capture only
+the first segment's cast and silently drop the rest. This has been found and
+manually corrected for several Treehouse of Horror installments; if you
+re-run the scraper against new anthology-style episodes, spot-check their
+character counts against the wiki page directly.
 
 ## Frontend
 
