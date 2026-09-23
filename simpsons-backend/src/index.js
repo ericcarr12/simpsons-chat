@@ -52,11 +52,22 @@ async function vectorizeId(realId) {
   return `long-${hashHex.slice(0, 40)}`;
 }
 
-async function rateLimit(env, request) {
+// Per-IP, per-hour rate limits, bucketed by endpoint so a burst of feedback
+// clicks can't eat into the chat quota (or vice versa). "chat" keeps the
+// original limit; feedback/contact get their own, more generous or
+// stricter as appropriate.
+const RATE_LIMITS = {
+  chat: RATE_LIMIT_PER_HOUR,
+  feedback: 60,
+  contact: 10,
+};
+
+async function rateLimit(env, request, bucket = "chat") {
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
-  const key = `rl:${ip}:${new Date().toISOString().slice(0, 13)}`;
+  const key = `rl:${bucket}:${ip}:${new Date().toISOString().slice(0, 13)}`;
+  const limit = RATE_LIMITS[bucket] ?? RATE_LIMIT_PER_HOUR;
   const current = parseInt((await env.RATE_LIMIT.get(key)) || "0", 10);
-  if (current >= RATE_LIMIT_PER_HOUR) return false;
+  if (current >= limit) return false;
   await env.RATE_LIMIT.put(key, String(current + 1), { expirationTtl: 3600 });
   return true;
 }
@@ -579,6 +590,105 @@ async function handleChat(request, env) {
   });
 }
 
+// ---------- Feedback (thumbs up/down on chat answers) ----------
+
+async function handleFeedback(request, env) {
+  const allowed = await rateLimit(env, request, "feedback");
+  if (!allowed) {
+    return json({ error: "D'oh! Rate limit exceeded. Try again in a bit." }, 429);
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: "D'oh! Invalid JSON body." }, 400);
+  }
+
+  const rating = body.rating === "up" || body.rating === "down" ? body.rating : null;
+  if (!rating) return json({ error: "D'oh! 'rating' must be 'up' or 'down'." }, 400);
+
+  const message = (body.message || "").toString().trim().slice(0, 500);
+  const answer = (body.answer || "").toString().trim().slice(0, 4000);
+
+  const result = await env.DB.prepare(
+    `INSERT INTO chat_feedback (message, answer, rating, created_at) VALUES (?, ?, ?, datetime('now'))`
+  )
+    .bind(message, answer, rating)
+    .run();
+
+  return json({ ok: true, id: result.meta?.last_row_id ?? null });
+}
+
+// Lets the frontend's "Undo" link remove the vote it just submitted. Scoped
+// to rows inserted in the last 10 minutes so a stale/guessed id can't be
+// used to delete arbitrary older feedback.
+async function handleFeedbackUndo(request, env) {
+  const allowed = await rateLimit(env, request, "feedback");
+  if (!allowed) {
+    return json({ error: "D'oh! Rate limit exceeded. Try again in a bit." }, 429);
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: "D'oh! Invalid JSON body." }, 400);
+  }
+
+  const id = parseInt(body.id, 10);
+  if (!id || Number.isNaN(id)) return json({ error: "D'oh! 'id' is required." }, 400);
+
+  const result = await env.DB.prepare(
+    `DELETE FROM chat_feedback WHERE id = ? AND created_at >= datetime('now', '-10 minutes')`
+  )
+    .bind(id)
+    .run();
+
+  return json({ ok: true, deleted: result.meta?.changes ?? 0 });
+}
+
+// ---------- Contact form ----------
+
+const CONTACT_REASONS = new Set([
+  "incorrect-info",
+  "feature-request",
+  "bug-report",
+  "business-press",
+  "other",
+]);
+
+async function handleContact(request, env) {
+  const allowed = await rateLimit(env, request, "contact");
+  if (!allowed) {
+    return json({ error: "D'oh! Rate limit exceeded. Try again in a bit." }, 429);
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: "D'oh! Invalid JSON body." }, 400);
+  }
+
+  const reason = CONTACT_REASONS.has(body.reason) ? body.reason : null;
+  if (!reason) return json({ error: "D'oh! Please pick a valid contact reason." }, 400);
+
+  const message = (body.message || "").toString().trim();
+  if (!message) return json({ error: "D'oh! Message can't be empty." }, 400);
+  if (message.length > 2000) return json({ error: "D'oh! Message too long (max 2000 chars)." }, 400);
+
+  const email = (body.email || "").toString().trim().slice(0, 320);
+
+  await env.DB.prepare(
+    `INSERT INTO contact_messages (reason, message, email, created_at) VALUES (?, ?, ?, datetime('now'))`
+  )
+    .bind(reason, message, email || null)
+    .run();
+
+  return json({ ok: true });
+}
+
 async function handleIngest(request, env) {
   const secret = request.headers.get("x-ingest-secret");
   if (!secret || secret !== env.INGEST_SECRET) {
@@ -690,6 +800,18 @@ export default {
 
     if (url.pathname === "/api/chat" && request.method === "POST") {
       return handleChat(request, env);
+    }
+
+    if (url.pathname === "/api/feedback" && request.method === "POST") {
+      return handleFeedback(request, env);
+    }
+
+    if (url.pathname === "/api/feedback/undo" && request.method === "POST") {
+      return handleFeedbackUndo(request, env);
+    }
+
+    if (url.pathname === "/api/contact" && request.method === "POST") {
+      return handleContact(request, env);
     }
 
     if (url.pathname === "/api/ingest" && request.method === "POST") {
