@@ -95,13 +95,42 @@ the `entries` table, and not Vectorize.
 |---|---|---|---|
 | GET | `/api/health` | none | Liveness check — returns `{ ok: true }` |
 | POST | `/api/chat` | none (IP rate-limited) | `{ message }` → `{ answer, sources, noMatch? }` |
+| POST | `/api/feedback` | none (IP rate-limited) | `{ message, answer, rating: "up"\|"down" }` → logs to `chat_feedback`, returns `{ ok, id }` |
+| POST | `/api/feedback/undo` | none (IP rate-limited) | `{ id }` → deletes that `chat_feedback` row, only if inserted in the last 10 minutes |
+| POST | `/api/contact` | none (IP rate-limited) | `{ reason, message, email? }` → logs to `contact_messages` |
 | POST | `/api/ingest` | `x-ingest-secret` header | `{ entries: [...] }` → upserts into D1 + Vectorize |
 | POST | `/api/admin/delete` | `x-ingest-secret` header | `{ ids: [...] }` → removes entries from both D1 and Vectorize by id |
 
 Note: `/api/ingest` and `/api/admin/delete` only touch the `entries` table
-and Vectorize. `episode_producers` and `episode_characters` are edited
-directly via D1 (`wrangler d1 execute` or the Cloudflare dashboard) — there's
-no dedicated endpoint for them yet.
+and Vectorize. `episode_producers`, `episode_characters`, `chat_feedback`,
+and `contact_messages` are all edited/read directly via D1 (`wrangler d1
+execute` or the Cloudflare dashboard) — there's no dedicated endpoint for
+managing them yet.
+
+Rate limits are now bucketed per endpoint (`RATE_LIMITS` in `src/index.js`)
+rather than one shared counter — `/api/chat` keeps the original 30/hour/IP,
+`/api/feedback` allows 60/hour/IP, and `/api/contact` is capped at
+10/hour/IP to deter spam.
+
+### Feedback and contact data (Beta 1.2)
+
+The frontend's thumbs up/down controls on each chat answer call
+`/api/feedback`, and the "Contact / Feedback" button opens a modal (reason
+dropdown + message textarea + optional email) that calls `/api/contact`.
+Both just log to D1 — review them directly:
+
+```bash
+wrangler d1 execute simpsons-db --command "SELECT * FROM chat_feedback ORDER BY created_at DESC LIMIT 50"
+wrangler d1 execute simpsons-db --command "SELECT * FROM contact_messages ORDER BY created_at DESC LIMIT 50"
+```
+
+`chat_feedback.rating` is either `"up"` or `"down"`; use downvoted rows
+(with their `message`/`answer` pairs) as a worklist for dataset gaps or
+wrong answers. `contact_messages.reason` is one of `incorrect-info`,
+`feature-request`, `bug-report`, `business-press`, or `other` — edit the
+`CONTACT_REASONS` set and the `<select>` options in `index.html` together if
+you want to change this list. Neither table has an email/notification
+integration yet — you have to check D1 to see new submissions.
 
 ## Prerequisites (for redeploying or forking)
 
