@@ -34,6 +34,8 @@ AI, Vectorize, D1, KV) plus the Anthropic API.
 index.html            Frontend — single self-contained static HTML file
                        (depends on an images/ folder not included here; see
                        simpsons-backend/README.md for the asset list)
+admin.html             Standalone, unlinked feedback-review page — see
+                       "Feedback and contact" below
 simpsons-backend/      Cloudflare Worker backend (RAG + deterministic
                        lookups), dataset, ingestion scripts, and deployment
                        instructions — see simpsons-backend/README.md
@@ -52,6 +54,22 @@ lookups described above (complete producer/writer lists, full "which
 episodes feature X" results, and curated episode-count write-ups for Homer,
 Marge, Bart, Lisa, and Maggie). See `simpsons-backend/README.md` for how the
 dataset is loaded, structured, and extended.
+
+## Feedback and contact
+
+Every chat answer has thumbs up/down controls (with an undo), and a
+"Contact / Feedback" button opens a form (reason dropdown + message,
+optional email) — both feed into D1 tables (`chat_feedback`,
+`contact_messages`). `admin.html` is a standalone, unlinked page for
+reviewing both without writing SQL by hand — see
+`simpsons-backend/README.md` for the endpoints, how to query the tables
+directly, and important notes on `admin.html`'s access model.
+
+## Analytics
+
+Cloudflare Web Analytics is wired up via a beacon script in `index.html`
+(privacy-friendly, no cookies) — visit/visitor/referrer data shows up in
+the Cloudflare dashboard under Web Analytics.
 
 ## Accessibility
 
