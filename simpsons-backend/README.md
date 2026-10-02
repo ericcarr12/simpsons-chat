@@ -100,6 +100,7 @@ the `entries` table, and not Vectorize.
 | POST | `/api/contact` | none (IP rate-limited) | `{ reason, message, email? }` → logs to `contact_messages` |
 | POST | `/api/ingest` | `x-ingest-secret` header | `{ entries: [...] }` → upserts into D1 + Vectorize |
 | POST | `/api/admin/delete` | `x-ingest-secret` header | `{ ids: [...] }` → removes entries from both D1 and Vectorize by id |
+| GET | `/api/admin/feedback` | `x-ingest-secret` header | Returns the last 200 rows each from `chat_feedback` and `contact_messages` |
 
 Note: `/api/ingest` and `/api/admin/delete` only touch the `entries` table
 and Vectorize. `episode_producers`, `episode_characters`, `chat_feedback`,
@@ -130,7 +131,22 @@ wrong answers. `contact_messages.reason` is one of `incorrect-info`,
 `feature-request`, `bug-report`, `business-press`, or `other` — edit the
 `CONTACT_REASONS` set and the `<select>` options in `index.html` together if
 you want to change this list. Neither table has an email/notification
-integration yet — you have to check D1 to see new submissions.
+integration yet.
+
+### Feedback review page (`admin.html`)
+
+For a quicker look than running SQL by hand, `admin.html` (repo root,
+alongside `index.html`) is a standalone page that calls
+`/api/admin/feedback` and renders the last 200 rows of each table. It's
+**not linked from the public site** — it only exists as a URL you navigate
+to directly (e.g. `https://www.simpsons.chat/admin.html`), and it's gated
+by the same `INGEST_SECRET` as `/api/ingest`. This is convenience, not real
+access control: anyone who finds the URL and has (or guesses) the secret
+can read this data. Treat the secret with the same care as any other admin
+credential, and don't link to this page from anywhere public. The page
+remembers the secret in that browser's `localStorage` so you don't have to
+retype it every visit — there's a "Forget saved secret" button if you're on
+a shared machine.
 
 ## Prerequisites (for redeploying or forking)
 
@@ -273,6 +289,17 @@ The frontend has been audited and patched for WCAG 2.1 AA compliance
 (live-region announcements for new chat messages, labeled form controls,
 visible focus states, compliant color contrast throughout) plus one AAA-level
 enhancement (44px minimum touch targets on the suggestion buttons).
+
+`index.html` also carries a Cloudflare Web Analytics beacon script (just
+before `</body>`) — privacy-friendly, cookie-free visit tracking, set up
+per-site in the Cloudflare dashboard under Web Analytics. If you fork this
+project, you'll want to either remove that script tag or replace its
+`data-cf-beacon` token with one registered to your own site, since it's
+currently tied to the live site's Cloudflare account.
+
+Remember to upload `admin.html` alongside `index.html` when deploying the
+frontend — see [Feedback review page](#feedback-review-page-adminhtml)
+above.
 
 ## Costs to be aware of
 
