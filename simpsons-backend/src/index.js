@@ -689,6 +689,26 @@ async function handleContact(request, env) {
   return json({ ok: true });
 }
 
+// Read-only summary of recent feedback/contact submissions, for the
+// standalone admin.html page -- protected by the same secret as
+// /api/ingest since it's already the site's one piece of admin auth.
+async function handleAdminFeedback(request, env) {
+  const secret = request.headers.get("x-ingest-secret");
+  if (!secret || secret !== env.INGEST_SECRET) {
+    return json({ error: "Unauthorized." }, 401);
+  }
+
+  const { results: feedback } = await env.DB.prepare(
+    `SELECT id, message, answer, rating, created_at FROM chat_feedback ORDER BY created_at DESC LIMIT 200`
+  ).all();
+
+  const { results: contact } = await env.DB.prepare(
+    `SELECT id, reason, message, email, created_at FROM contact_messages ORDER BY created_at DESC LIMIT 200`
+  ).all();
+
+  return json({ feedback: feedback || [], contact: contact || [] });
+}
+
 async function handleIngest(request, env) {
   const secret = request.headers.get("x-ingest-secret");
   if (!secret || secret !== env.INGEST_SECRET) {
@@ -812,6 +832,10 @@ export default {
 
     if (url.pathname === "/api/contact" && request.method === "POST") {
       return handleContact(request, env);
+    }
+
+    if (url.pathname === "/api/admin/feedback" && request.method === "GET") {
+      return handleAdminFeedback(request, env);
     }
 
     if (url.pathname === "/api/ingest" && request.method === "POST") {
