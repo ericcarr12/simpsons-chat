@@ -1,0 +1,20 @@
+# Cloudflare Wrangler local cache — contains your account ID and account email, never commit
+.wrangler/
+
+# OS clutter
+.DS_Store
+__MACOSX/
+
+# Dependencies
+node_modules/
+
+# Secrets — never commit these (they're set via `wrangler secret put`, not stored in files)
+.env
+.dev.vars
+
+# Large intermediate pipeline artifacts (wikitext caches, raw batch files) —
+# optional to exclude; keep if you want to show the pipeline's output, drop if
+# you'd rather keep the repo lean. The final dataset (data/simpsons-data.json)
+# is what actually matters for anyone browsing the repo.
+simpsons-backend/pipeline_state/batches/
+simpsons-backend/pipeline_state/*wikitext_cache.json

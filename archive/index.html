@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ask Springfield — A Simpsons Fan Chatbot</title>
+<style>
+  :root {
+    --simpsons-yellow: #FFD90F;
+    --simpsons-blue: #1E5AA8;
+    --simpsons-pink: #ff81c1;
+    --dark: #2b2b2b;
+    --background-blue: #31ABED;
+    --white: #fff;
+    --black: #000;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: 
+      url('images/bg-left.jpg') left / auto 100% no-repeat fixed,
+      url('images/bg-right.jpg') right / auto 100% no-repeat fixed,
+      var(--background-blue);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  header {
+    text-align: left;
+    margin-bottom: 24px;
+    max-width: 640px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap:16px;
+  }
+  header h1 {
+    font-size: 2rem;
+    color: var(--white);
+    text-shadow: 2px 2px 2px var(--black);
+    margin: 16px 0 0 0;
+    letter-spacing: 1px;
+  }
+  header p {
+    color: #fff;
+    font-size: 1.5rem;
+    margin: 6px 0 0;
+    text-shadow: 2px 2px 2px var(--black);
+  }
+  .logo {
+    width:180px;
+  }
+  .chat-card {
+    width: 100%;
+    max-width: 640px;
+    background: #fff;
+    border: 3px solid var(--dark);
+    border-radius: 16px;
+    box-shadow: 6px 6px 0 rgba(0,0,0,0.15);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .chat-header {
+    background: var(--simpsons-pink);
+    padding: 12px 16px;
+    font-weight: 700;
+    border-bottom: 3px solid var(--dark);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .chat-log {
+    flex: 1;
+    min-height: 360px;
+    max-height: 480px;
+    overflow-y: auto;
+    padding: 16px;
+    background: #fffdf5;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .bubble {
+    max-width: 82%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    line-height: 1.4;
+    font-size: 0.95rem;
+    white-space: pre-wrap;
+  }
+  .bubble.bot {
+    align-self: flex-start;
+    background: var(--simpsons-yellow);
+    border: 2px solid var(--dark);
+    border-bottom-left-radius: 2px;
+  }
+  .bubble.user {
+    align-self: flex-end;
+    background: var(--simpsons-blue);
+    color: #fff;
+    border-bottom-right-radius: 2px;
+  }
+  .bubble .src {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.75rem;
+    opacity: 0.75;
+  }
+  .bubble .src a { color: inherit; }
+  .typing {
+    font-style: italic;
+    opacity: 0.7;
+  }
+  form.chat-input {
+    display: flex;
+    border-top: 3px solid var(--dark);
+  }
+  form.chat-input input {
+    flex: 1;
+    border: none;
+    padding: 14px;
+    font-size: 1rem;
+    outline: none;
+  }
+  form.chat-input button {
+    border: none;
+    background: var(--simpsons-blue);
+    color: #fff;
+    padding: 0 22px;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 1rem;
+  }
+  form.chat-input button:hover { background: #164483; }
+  .suggestions {
+    max-width: 640px;
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 24px;
+    justify-content: center;
+  }
+  .suggestions button {
+    background: var(--simpsons-yellow);
+    border: 2px solid var(--dark);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    box-shadow: 0 4px 4px #00000025;
+  }
+  .suggestions button:hover { transform:scale(1.05); background: white; }
+  footer {
+    max-width: 640px;
+    font-size: 0.8rem;
+    color: var(--black);
+    background-color: var(--simpsons-pink);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-top: 32px;
+  }
+  @media screen and (max-width: 640px) {
+    .mobile-hide { display:none; }
+    .logo { width: 120px; }
+    header h1 { font-size:1.5em; margin:0; }
+    header p { font-size:1em; }
+    body { justify-content: flex-start; background-image: none; }
+  }
+  @media screen and (max-width: 480px) {
+    header h1 { font-size:1.2em; margin:12px 0 0 0; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <img src="images/logo.svg" class="logo"/>
+    <div>
+      <h1>Unofficial Fan Chat</h1>
+      <p>Unofficial Fan Chat</p>
+    </div>
+</header>
+
+<div class="chat-card">
+  <div class="chat-header"><span class="mobile-hide">🍩&nbsp;🍩&nbsp;🍩&nbsp;&nbsp;</span>Ask me about characters, episodes, or Springfield trivia<span class="mobile-hide">&nbsp;&nbsp;🍩&nbsp;🍩&nbsp;🍩</span></div>
+  <div class="chat-log" id="chatLog"></div>
+  <form class="chat-input" id="chatForm">
+    <input type="text" id="chatInput" placeholder="Enter your question here &lpar;e.g. Who is Ned Flanders?&rpar;" autocomplete="on" />
+    <button type="submit">Send</button>
+  </form>
+</div>
+
+<div class="suggestions" id="suggestions">
+  <button data-q="Who is Homer Simpson?">Who is Homer Simpson?</button>
+  <button data-q="Tell me about Mr. Burns">Tell me about Mr. Burns</button>
+  <button data-q="What is Bart's catchphrase?">Bart's catchphrase?</button>
+  <button data-q="Who voices Lisa Simpson?">Who voices Lisa?</button>
+  <button data-q="What street do the Simpsons live on?">Where do they live?</button>
+</div>
+
+<footer>
+  Fan-made project, not affiliated with or endorsed by Fox, Disney, or Matt Groening.
+  Answers are drawn from a small curated dataset, plus live lookups on the Simpsons Wiki (Fandom)
+  and Wikipedia as a fallback. 
+  Built as a fan project. Character data: small curated set + live lookups on
+  <a href="https://simpsons.fandom.com" target="_blank" rel="noopener">Simpsons Wiki (Fandom)</a> and
+  <a href="https://en.wikipedia.org" target="_blank" rel="noopener">Wikipedia</a>, both CC BY-SA.
+</footer>
+
+<script>
+// ---------- Backend (Cloudflare Worker RAG chat) ----------
+const BACKEND_URL = "https://simpsons-chatbot.erccrr.workers.dev";
+
+async function backendLookup(query) {
+  if (!BACKEND_URL) return null;
+  const res = await fetch(BACKEND_URL + "/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: query }),
+  });
+  if (!res.ok) throw new Error("Backend error " + res.status);
+  return res.json(); // { answer, sources }
+}
+
+// ---------- Curated local dataset (fast, reliable answers for the core cast) ----------
+const DATA = [
+  {
+    keys: ["homer", "homer simpson"],
+    title: "Homer Simpson",
+    text: "Homer Jay Simpson is the bumbling but well-meaning patriarch of the Simpson family. He works as a safety inspector at the Springfield Nuclear Power Plant, loves donuts and Duff Beer, and is known for his catchphrase \"D'oh!\" He's voiced by Dan Castellaneta."
+  },
+  {
+    keys: ["marge", "marge simpson"],
+    title: "Marge Simpson",
+    text: "Marge Simpson is Homer's wife and the level-headed matriarch of the family, recognizable by her tall blue beehive hairdo. She's voiced by Julie Kavner."
+  },
+  {
+    keys: ["bart", "bart simpson"],
+    title: "Bart Simpson",
+    text: "Bart Simpson is the mischievous 10-year-old son, famous for skateboarding, prank calls to Moe's Tavern, and catchphrases like \"Ay, caramba!\" and \"Eat my shorts!\" He's voiced by Nancy Cartwright."
+  },
+  {
+    keys: ["lisa", "lisa simpson"],
+    title: "Lisa Simpson",
+    text: "Lisa Simpson is the intellectual, saxophone-playing 8-year-old middle child, often the moral conscience of the show. She's voiced by Yeardley Smith."
+  },
+  {
+    keys: ["maggie", "maggie simpson"],
+    title: "Maggie Simpson",
+    text: "Maggie is the baby of the Simpson family, almost always seen with a pacifier. She rarely speaks but has had memorable moments throughout the series."
+  },
+  {
+    keys: ["ned", "ned flanders", "flanders"],
+    title: "Ned Flanders",
+    text: "Ned Flanders is the Simpsons' relentlessly cheerful, devoutly religious next-door neighbor, known for phrases like \"Okily dokily!\" He's voiced by Harry Shearer."
+  },
+  {
+    keys: ["mr burns", "burns", "montgomery burns", "c. montgomery burns"],
+    title: "Mr. Burns",
+    text: "Charles Montgomery Burns is the ancient, wealthy, and villainous owner of the Springfield Nuclear Power Plant. Frequently seen with assistant Waylon Smithers. Voiced by Harry Shearer."
+  },
+  {
+    keys: ["moe", "moe szyslak"],
+    title: "Moe Szyslak",
+    text: "Moe Szyslak runs Moe's Tavern, the bar frequented by Homer and friends. Known for his gruff demeanor and being the target of Bart's prank calls. Voiced by Hank Azaria."
+  },
+  {
+    keys: ["krusty", "krusty the clown"],
+    title: "Krusty the Clown",
+    text: "Krusty the Clown is Springfield's cynical, chain-smoking children's TV host, a favorite of Bart's. Voiced by Dan Castellaneta."
+  },
+  {
+    keys: ["milhouse", "milhouse van houten"],
+    title: "Milhouse Van Houten",
+    text: "Milhouse is Bart's best friend — nerdy, unlucky in love, and often dragged into Bart's schemes. Voiced by Pamela Hayden (through most of the series)."
+  },
+  {
+    keys: ["smithers", "waylon smithers"],
+    title: "Waylon Smithers",
+    text: "Waylon Smithers is Mr. Burns' devoted, meticulous personal assistant at the power plant."
+  },
+  {
+    keys: ["wiggum", "chief wiggum", "clancy wiggum"],
+    title: "Chief Wiggum",
+    text: "Chief Clancy Wiggum is Springfield's incompetent, donut-loving police chief. Voiced by Hank Azaria."
+  },
+  {
+    keys: ["apu", "apu nahasapeemapetilon"],
+    title: "Apu Nahasapeemapetilon",
+    text: "Apu ran the Kwik-E-Mart convenience store in early seasons. His character and voicing became a subject of significant public debate in later years regarding representation."
+  },
+  {
+    keys: ["catchphrase", "bart's catchphrase", "bart catchphrase"],
+    title: "Bart's catchphrases",
+    text: "Bart is known for catchphrases including \"Ay, caramba!\", \"Eat my shorts!\", and \"I didn't do it.\""
+  },
+  {
+    keys: ["address", "where do they live", "evergreen terrace", "street"],
+    title: "The Simpsons' address",
+    text: "The Simpson family lives at 742 Evergreen Terrace in the fictional town of Springfield (the state is deliberately never specified)."
+  },
+  {
+    keys: ["creator", "who created", "matt groening"],
+    title: "Creator",
+    text: "The Simpsons was created by Matt Groening for the Fox network. It began as animated shorts on The Tracey Ullman Show in 1987 before becoming its own series in 1989."
+  },
+  {
+    keys: ["springfield nuclear power plant", "power plant"],
+    title: "Springfield Nuclear Power Plant",
+    text: "The Springfield Nuclear Power Plant is owned by Mr. Burns and is where Homer works as a safety inspector, often to comic (and alarming) effect."
+  }
+];
+
+function localLookup(query) {
+  const q = query.toLowerCase();
+  let best = null;
+  let bestScore = 0;
+  for (const entry of DATA) {
+    for (const key of entry.keys) {
+      if (q.includes(key)) {
+        const score = key.length;
+        if (score > bestScore) {
+          bestScore = score;
+          best = entry;
+        }
+      }
+    }
+  }
+  return best;
+}
+
+// ---------- Fandom Simpsons Wiki lookup (primary live source — deepest in-universe detail) ----------
+const FANDOM_API = "https://simpsons.fandom.com/api.php";
+
+async function fandomLookup(query) {
+  const searchUrl = FANDOM_API + "?action=query&list=search&format=json&origin=*&srlimit=1&srsearch=" +
+    encodeURIComponent(query);
+  const searchRes = await fetch(searchUrl);
+  if (!searchRes.ok) return null;
+  const searchJson = await searchRes.json();
+  const hits = searchJson?.query?.search;
+  if (!hits || hits.length === 0) return null;
+
+  const hit = hits[0];
+  const title = hit.title;
+  const pageUrl = "https://simpsons.fandom.com/wiki/" + encodeURIComponent(title.replace(/ /g, "_"));
+
+  // Preferred: a clean plain-text extract (works if the TextExtracts extension is enabled on this wiki)
+  try {
+    const extractUrl = FANDOM_API + "?action=query&prop=extracts&exintro=1&explaintext=1&format=json&origin=*&titles=" +
+      encodeURIComponent(title);
+    const extractRes = await fetch(extractUrl);
+    if (extractRes.ok) {
+      const extractJson = await extractRes.json();
+      const pages = extractJson?.query?.pages;
+      const page = pages ? Object.values(pages)[0] : null;
+      if (page && page.extract && page.extract.trim().length > 0) {
+        return { title, text: page.extract.trim(), url: pageUrl, source: "Simpsons Wiki (Fandom)" };
+      }
+    }
+  } catch (e) {
+    // fall through to snippet fallback below
+  }
+
+  // Fallback: the search result snippet is always available, even without TextExtracts
+  const snippetText = (hit.snippet || "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+  if (snippetText) {
+    return { title, text: snippetText + "…", url: pageUrl, source: "Simpsons Wiki (Fandom)" };
+  }
+  return null;
+}
+
+// ---------- Wikipedia fallback (live lookup for anything not in the local set) ----------
+async function wikipediaLookup(query) {
+  const searchUrl = "https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&origin=*&srsearch=" +
+    encodeURIComponent(query + " The Simpsons");
+  const searchRes = await fetch(searchUrl);
+  const searchJson = await searchRes.json();
+  const hits = searchJson?.query?.search;
+  if (!hits || hits.length === 0) return null;
+  const title = hits[0].title;
+  const summaryRes = await fetch("https://en.wikipedia.org/api/rest_v1/page/summary/" + encodeURIComponent(title));
+  if (!summaryRes.ok) return null;
+  const summaryJson = await summaryRes.json();
+  if (!summaryJson.extract) return null;
+  return {
+    title: summaryJson.title,
+    text: summaryJson.extract,
+    url: summaryJson.content_urls?.desktop?.page || ("https://en.wikipedia.org/wiki/" + encodeURIComponent(title))
+  };
+}
+
+// ---------- Chat UI wiring ----------
+const chatLog = document.getElementById("chatLog");
+const chatForm = document.getElementById("chatForm");
+const chatInput = document.getElementById("chatInput");
+
+function addBubble(text, who, srcHtml) {
+  const div = document.createElement("div");
+  div.className = "bubble " + who;
+  div.textContent = text;
+  if (srcHtml) {
+    const src = document.createElement("span");
+    src.className = "src";
+    src.innerHTML = srcHtml;
+    div.appendChild(src);
+  }
+  chatLog.appendChild(div);
+  chatLog.scrollTop = chatLog.scrollHeight;
+  return div;
+}
+
+async function handleQuery(query) {
+  addBubble(query, "user");
+  const typing = addBubble("Checking Springfield records…", "bot typing");
+
+  if (BACKEND_URL) {
+    try {
+      const backend = await backendLookup(query);
+      if (backend && backend.answer && !backend.noMatch) {
+        typing.remove();
+        const srcHtml = (backend.sources || [])
+          .filter((s) => s && s.title)
+          .map((s) => (s.url ? '<a href="' + s.url + '" target="_blank" rel="noopener">' + s.title + "</a>" : s.title))
+          .join(", ");
+        addBubble(backend.answer, "bot", srcHtml ? "Sources: " + srcHtml : "Source: Simpsons chatbot backend");
+        return;
+      }
+      // backend.noMatch === true means the curated dataset had nothing relevant —
+      // fall through to the client-side lookups below instead of treating that as final.
+    } catch (e) {
+      // backend unreachable/misconfigured — fall through to the client-side lookups below
+    }
+  }
+
+  const local = localLookup(query);
+  if (local) {
+    typing.remove();
+    addBubble(local.text, "bot", "Source: curated fan-site dataset (" + local.title + ")");
+    return;
+  }
+
+  try {
+    const fandom = await fandomLookup(query);
+    if (fandom) {
+      typing.remove();
+      addBubble(fandom.text, "bot", 'Source: <a href="' + fandom.url + '" target="_blank" rel="noopener">' +
+        fandom.source + " — " + fandom.title + "</a>");
+      return;
+    }
+  } catch (e) {
+    // fall through to Wikipedia
+  }
+
+  try {
+    const wiki = await wikipediaLookup(query);
+    typing.remove();
+    if (wiki) {
+      addBubble(wiki.text, "bot", 'Source: <a href="' + wiki.url + '" target="_blank" rel="noopener">Wikipedia — ' + wiki.title + "</a>");
+    } else {
+      addBubble("D'oh! I couldn't find anything about that in Springfield's records. Try asking about a specific character or episode.", "bot");
+    }
+  } catch (err) {
+    typing.remove();
+    addBubble("D'oh! Something went wrong reaching the wiki APIs. Check your connection and try again.", "bot");
+  }
+}
+
+chatForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const q = chatInput.value.trim();
+  if (!q) return;
+  chatInput.value = "";
+  handleQuery(q);
+});
+
+document.getElementById("suggestions").addEventListener("click", (e) => {
+  if (e.target.tagName === "BUTTON") {
+    handleQuery(e.target.dataset.q);
+  }
+});
+
+// Greeting
+addBubble("Welcome to Springfield! Ask me about any character, episode, or bit of trivia.", "bot");
+</script>
+
+</body>
+</html>

@@ -1,0 +1,7 @@
+# Only allow simpsons.chat to be embedded (iframe/frame/object) by eric-carr.com.
+# frame-ancestors is the modern standard; it supersedes X-Frame-Options in
+# current browsers, which can't express an allowlist anyway.
+<IfModule mod_headers.c>
+  Header always set Content-Security-Policy "frame-ancestors 'self' https://eric-carr.com https://www.eric-carr.com"
+  Header always unset X-Frame-Options
+</IfModule>
