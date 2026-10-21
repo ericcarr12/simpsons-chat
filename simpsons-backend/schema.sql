@@ -48,6 +48,17 @@ CREATE TABLE IF NOT EXISTS chat_feedback (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+-- One row per answered /api/chat question, for usage metrics. Deliberately
+-- stores no question text, answer, IP, or other identifier -- only when it
+-- happened and which path answered it. Written by logQuestion in src/index.js.
+CREATE TABLE IF NOT EXISTS chat_log (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  source     TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_log_created_at ON chat_log(created_at);
+
 CREATE TABLE IF NOT EXISTS contact_messages (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   reason     TEXT NOT NULL,

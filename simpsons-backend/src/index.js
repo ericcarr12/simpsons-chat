@@ -503,7 +503,19 @@ function tryMemorableQuoteLookup(message) {
   return null;
 }
 
-async function handleChat(request, env) {
+// Usage counter: one chat_log row per answered question -- timestamp and
+// answer path only, never the question text. Runs after the response via
+// waitUntil, and a failed insert (e.g. table not migrated yet) is swallowed
+// so it can never break a chat reply.
+function logQuestion(env, ctx, source) {
+  const write = env.DB.prepare(`INSERT INTO chat_log (source, created_at) VALUES (?, datetime('now'))`)
+    .bind(source)
+    .run()
+    .catch(() => {});
+  if (ctx) ctx.waitUntil(write);
+}
+
+async function handleChat(request, env, ctx) {
   const allowed = await rateLimit(env, request);
   if (!allowed) {
     return json({ error: "D'oh! Rate limit exceeded. Try again in a bit." }, 429);
@@ -525,13 +537,22 @@ async function handleChat(request, env) {
   // these need to be complete and grounded, not an approximation from top-K
   // semantic matches.
   const quoteResult = tryMemorableQuoteLookup(message);
-  if (quoteResult) return json(quoteResult);
+  if (quoteResult) {
+    logQuestion(env, ctx, "quote");
+    return json(quoteResult);
+  }
 
   const producerResult = await tryProducerLookup(message, env);
-  if (producerResult) return json(producerResult);
+  if (producerResult) {
+    logQuestion(env, ctx, "producer");
+    return json(producerResult);
+  }
 
   const characterResult = await tryCharacterEpisodesLookup(message, env);
-  if (characterResult) return json(characterResult);
+  if (characterResult) {
+    logQuestion(env, ctx, "character");
+    return json(characterResult);
+  }
 
   const vector = await embed(env, message);
   const matches = await env.VECTORIZE_INDEX.query(vector, {
@@ -542,6 +563,7 @@ async function handleChat(request, env) {
   const contextEntries = (matches.matches || []).filter((m) => m.score > 0.4);
 
   if (contextEntries.length === 0) {
+    logQuestion(env, ctx, "no_match");
     return json({
       answer:
         "D'oh! I couldn't find anything about that in Springfield's records. Try asking about a specific character or episode.",
@@ -580,12 +602,14 @@ async function handleChat(request, env) {
 
   if (!anthropicRes.ok) {
     const errText = await anthropicRes.text();
+    logQuestion(env, ctx, "llm_error");
     return json({ error: "D'oh! LLM call failed.", detail: errText }, 502);
   }
 
   const anthropicJson = await anthropicRes.json();
   const answer = anthropicJson.content?.[0]?.text || "D'oh! I'm not sure how to answer that.";
 
+  logQuestion(env, ctx, "rag");
   return json({
     answer,
     sources: contextEntries.map((m) => ({
@@ -824,12 +848,12 @@ const ALLOWED_ORIGINS = new Set([
 ]);
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const origin = request.headers.get("Origin");
     if (origin && !ALLOWED_ORIGINS.has(origin)) {
       return json({ error: "Origin not allowed." }, 403);
     }
-    const res = await route(request, env);
+    const res = await route(request, env, ctx);
     if (!origin) return res;
     const out = new Response(res.body, res);
     out.headers.set("Access-Control-Allow-Origin", origin);
@@ -838,7 +862,7 @@ export default {
   },
 };
 
-async function route(request, env) {
+async function route(request, env, ctx) {
   {
     const url = new URL(request.url);
 
@@ -851,7 +875,7 @@ async function route(request, env) {
     }
 
     if (url.pathname === "/api/chat" && request.method === "POST") {
-      return handleChat(request, env);
+      return handleChat(request, env, ctx);
     }
 
     if (url.pathname === "/api/feedback" && request.method === "POST") {
