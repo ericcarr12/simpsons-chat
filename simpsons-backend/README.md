@@ -14,9 +14,9 @@ redeploying, extending, or forking this.
 
 ## Architecture
 
-- **Frontend** (`index.html`, deployed separately to static hosting — see
-  [Frontend](#frontend) below): single self-contained HTML file with inline
-  CSS/JS. No build step.
+- **Frontend** (`public/index.html`, served by the same Worker as static
+  assets — see [Frontend](#frontend) below): single self-contained HTML file
+  with inline CSS/JS. No build step.
 - **Workers AI** (`@cf/baai/bge-base-en-v1.5`): generates 768-dimensional
   embeddings for both stored entries and incoming questions.
 - **Vectorize** (`simpsons-index`): semantic search over the embedded
@@ -84,7 +84,7 @@ Batches API enrichment pass that generated quotes and longer summaries for
 each entry.
 
 Separately, `episode_producers` and `episode_characters` hold structured,
-per-episode producer credits and character appearances for all **809**
+per-episode producer credits and character appearances for all **813**
 broadcast episodes (reconciled against the current real episode count as of
 August 2026). These are what the deterministic lookups above query — not
 the `entries` table, and not Vectorize.
@@ -135,8 +135,8 @@ integration yet.
 
 ### Feedback review page (`admin.html`)
 
-For a quicker look than running SQL by hand, `admin.html` (repo root,
-alongside `index.html`) is a standalone page that calls
+For a quicker look than running SQL by hand, `public/admin.html`
+(alongside `index.html`) is a standalone page that calls
 `/api/admin/feedback` and renders the last 200 rows of each table. It's
 **not linked from the public site** — it only exists as a URL you navigate
 to directly (e.g. `https://www.simpsons.chat/admin.html`), and it's gated
@@ -185,8 +185,11 @@ wrangler secret put INGEST_SECRET
 wrangler deploy
 ```
 
-This prints your Worker's URL — update `BACKEND_URL` near the top of the
-`<script>` block in `index.html` to point at it.
+This deploys the API and the static site (`../public`) together and prints
+your Worker's URL. The frontend calls the API on its own origin
+(`window.location.origin`), so there's no URL to edit. To serve it from your
+own domain, uncomment and edit the `routes` block in `wrangler.toml` (the
+domain's DNS must be on Cloudflare).
 
 ## Making a code change (deterministic lookups, quotes, etc.)
 
@@ -277,13 +280,14 @@ character counts against the wiki page directly.
 
 ## Frontend
 
-`index.html` is a single self-contained file (inline CSS/JS, no build step)
-that talks to the Worker via the hardcoded `BACKEND_URL` constant. It
-depends on an `images/` folder alongside it containing `bg-left.jpg`,
-`bg-right.jpg`, `logo.svg`, `promo.jpg`, `speech1.svg`, and
-`comicbookguy.svg` — none of which live in this repo folder. Deploy it to
-any static host; the live copy is served from HostGator as an addon domain
-pointed at `public_html/simpsons-chat/`.
+`public/index.html` is a single self-contained file (inline CSS/JS, no build
+step). It talks to the API on its own origin, so the same file works on
+workers.dev and on the custom domain. It depends on the `public/images/`
+folder (`bg-left.jpg`, `bg-right.jpg`, `logo.svg`, `promo.jpg`,
+`speech1.svg`, `comicbookguy.svg`). The Worker serves everything in `public/`
+as static assets (configured under `[assets]` in `wrangler.toml`); only
+`/api/*` requests run Worker code. `public/_headers` sets the
+`frame-ancestors` rule so only eric-carr.com can embed the site.
 
 The frontend has been audited and patched for WCAG 2.1 AA compliance
 (live-region announcements for new chat messages, labeled form controls,
@@ -297,9 +301,8 @@ project, you'll want to either remove that script tag or replace its
 `data-cf-beacon` token with one registered to your own site, since it's
 currently tied to the live site's Cloudflare account.
 
-Remember to upload `admin.html` alongside `index.html` when deploying the
-frontend — see [Feedback review page](#feedback-review-page-adminhtml)
-above.
+`public/admin.html` deploys with the rest of `public/` — see
+[Feedback review page](#feedback-review-page-adminhtml) above.
 
 ## Costs to be aware of
 
@@ -314,12 +317,17 @@ above.
 
 ## Security notes
 
-- `CORS_HEADERS` in `src/index.js` still allows any origin (`*`). Since
-  `/api/chat`'s URL is visible in the frontend's page source regardless of
-  CORS policy, the only real protection against a third party calling it
-  directly (and running up Anthropic API usage) is the per-IP rate limit —
-  worth revisiting if abuse becomes a concern (e.g. a shared-secret header,
-  Cloudflare Turnstile, or a stricter limit).
+- Browser requests to the API are only accepted from the origins in
+  `ALLOWED_ORIGINS` in `src/index.js` (simpsons.chat, eric-carr.com and the
+  workers.dev address). That stops other websites from using visitors'
+  browsers to call it, but requests with no `Origin` header (curl, scripts)
+  are still allowed, so the per-IP rate limit remains the main protection
+  against cost abuse. Cloudflare Turnstile or a stricter limit would be the
+  next step if abuse becomes a concern.
+- A bare episode or segment title in a question (e.g. "Treehouse of Horror
+  XXXVII") is matched against D1 directly and placed first in the model's
+  context, since near-identical titles can crowd the right entry out of the
+  vector search's top results.
 - Never commit your Anthropic API key or `INGEST_SECRET` to version
   control — they're set as Worker secrets, not in `wrangler.toml`, on
   purpose. `anthropic-api-key.txt` in this folder is a local scratch file

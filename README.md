@@ -31,19 +31,21 @@ AI, Vectorize, D1, KV) plus the Anthropic API.
 ## Repo structure
 
 ```
-index.html            Frontend — single self-contained static HTML file
-                       (depends on an images/ folder not included here; see
-                       simpsons-backend/README.md for the asset list)
-admin.html             Standalone, unlinked feedback-review page — see
-                       "Feedback and contact" below
-simpsons-backend/      Cloudflare Worker backend (RAG + deterministic
-                       lookups), dataset, ingestion scripts, and deployment
+public/                Static site served by the Worker
+  index.html            Frontend — single self-contained HTML file
+  admin.html            Standalone, unlinked feedback-review page — see
+                        "Feedback and contact" below
+  images/               Background, logo and speech-bubble art
+  _headers              Security headers (embedding restricted to eric-carr.com)
+simpsons-backend/      Cloudflare Worker (RAG + deterministic lookups),
+                       dataset, ingestion scripts, and deployment
                        instructions — see simpsons-backend/README.md
+MIGRATION.md           Notes from moving the site from HostGator to Cloudflare
 ```
 
 ## Dataset
 
-~3,833 semantic-search entries covering every season's episodes (including
+~3,840 semantic-search entries covering every season's episodes (including
 Treehouse of Horror segments as individual entries) and several hundred
 characters, built from Wikisimpsons via a scrape-and-enrich pipeline, plus a
 small hand-curated set for the core cast and frequently-asked facts.
@@ -54,6 +56,15 @@ lookups described above (complete producer/writer lists, full "which
 episodes feature X" results, and curated episode-count write-ups for Homer,
 Marge, Bart, Lisa, and Maggie). See `simpsons-backend/README.md` for how the
 dataset is loaded, structured, and extended.
+
+## Hosting
+
+One Cloudflare Worker (`simpsons-chatbot`) serves both the static site
+(`public/`, as free static assets) and the API (`/api/*`) from the same
+domain, simpsons.chat. The API only accepts browser requests from
+simpsons.chat and eric-carr.com, and `_headers` limits embedding the site in
+an iframe to eric-carr.com. See `MIGRATION.md` for how the move from
+HostGator was done.
 
 ## Feedback and contact
 
