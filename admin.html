@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Ask Springfield — Feedback Review</title>
+<style>
+  :root {
+    --simpsons-yellow: #FFD90F;
+    --simpsons-blue: #1E5AA8;
+    --dark: #2b2b2b;
+    --background-blue: #31ABED;
+    --up: #146c2e;
+    --down: #b00020;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--background-blue);
+    color: var(--dark);
+    padding: 24px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  h1 { font-size: 1.6rem; margin: 0 0 16px; }
+  .card {
+    background: #fff;
+    border: 3px solid var(--dark);
+    border-radius: 16px;
+    box-shadow: 6px 6px 0 rgba(0,0,0,0.15);
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+  label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; }
+  .auth-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+  .auth-row > div { flex: 1; min-width: 200px; }
+  input[type="password"], input[type="text"] {
+    width: 100%;
+    padding: 10px;
+    border: 2px solid var(--dark);
+    border-radius: 8px;
+    font-size: 0.95rem;
+  }
+  button {
+    border: 2px solid var(--dark);
+    border-radius: 20px;
+    padding: 10px 18px;
+    font-weight: 600;
+    cursor: pointer;
+    background: var(--simpsons-yellow);
+    min-height: 44px;
+  }
+  button:hover { background: #fff; }
+  button.secondary { background: #fff; }
+  #authStatus { font-size: 0.85rem; margin-top: 10px; min-height: 1em; }
+  #authStatus.error { color: var(--down); font-weight: 600; }
+  #authStatus.success { color: var(--up); font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid #ddd;
+    vertical-align: top;
+  }
+  th { background: #fffdf5; position: sticky; top: 0; }
+  .rating-up { color: var(--up); font-weight: 700; }
+  .rating-down { color: var(--down); font-weight: 700; }
+  .table-scroll { max-height: 480px; overflow-y: auto; border: 2px solid var(--dark); border-radius: 8px; }
+  .empty-note { font-style: italic; color: #555; padding: 12px; }
+  .section-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Ask Springfield — Feedback Review</h1>
+
+  <div class="card">
+    <form id="authForm">
+      <div class="auth-row">
+        <div>
+          <label for="secretInput">Ingest secret</label>
+          <input type="password" id="secretInput" autocomplete="off" placeholder="Paste your INGEST_SECRET">
+        </div>
+        <button type="submit">Load</button>
+        <button type="button" id="forgetBtn" class="secondary">Forget saved secret</button>
+      </div>
+      <p id="authStatus" role="status" aria-live="polite"></p>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="section-head">
+      <h2 style="margin:0;">Chat feedback</h2>
+      <span id="feedbackCount"></span>
+    </div>
+    <div class="table-scroll">
+      <table id="feedbackTable">
+        <thead>
+          <tr><th>When</th><th>Rating</th><th>Question</th><th>Answer</th></tr>
+        </thead>
+        <tbody id="feedbackBody"></tbody>
+      </table>
+      <div id="feedbackEmpty" class="empty-note" hidden>No feedback yet.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-head">
+      <h2 style="margin:0;">Contact submissions</h2>
+      <span id="contactCount"></span>
+    </div>
+    <div class="table-scroll">
+      <table id="contactTable">
+        <thead>
+          <tr><th>When</th><th>Reason</th><th>Message</th><th>Email</th></tr>
+        </thead>
+        <tbody id="contactBody"></tbody>
+      </table>
+      <div id="contactEmpty" class="empty-note" hidden>No contact submissions yet.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Not linked from the public site -- this is a bookmark-only admin tool.
+// It is NOT real access control: anyone who finds the URL and has (or
+// guesses) the secret can read this data, same as anyone who already has
+// wrangler/dashboard access to INGEST_SECRET could via D1 directly.
+const BACKEND_URL = "https://simpsons-chatbot.erccrr.workers.dev";
+const STORAGE_KEY = "simpsonsAdminSecret";
+
+const authForm = document.getElementById("authForm");
+const secretInput = document.getElementById("secretInput");
+const authStatus = document.getElementById("authStatus");
+const forgetBtn = document.getElementById("forgetBtn");
+
+const feedbackBody = document.getElementById("feedbackBody");
+const feedbackEmpty = document.getElementById("feedbackEmpty");
+const feedbackCount = document.getElementById("feedbackCount");
+const contactBody = document.getElementById("contactBody");
+const contactEmpty = document.getElementById("contactEmpty");
+const contactCount = document.getElementById("contactCount");
+
+function fmtDate(s) {
+  if (!s) return "";
+  // D1's datetime('now') values are UTC without a timezone suffix --
+  // append one so the browser parses and displays them in local time.
+  const withZone = /Z$|[+-]\d\d:\d\d$/.test(s) ? s : s.replace(" ", "T") + "Z";
+  const d = new Date(withZone);
+  return isNaN(d.getTime()) ? s : d.toLocaleString();
+}
+
+function cell(text) {
+  const td = document.createElement("td");
+  td.textContent = text == null ? "" : String(text);
+  return td;
+}
+
+function renderFeedback(rows) {
+  feedbackBody.innerHTML = "";
+  feedbackCount.textContent = rows.length ? rows.length + " row(s)" : "";
+  feedbackEmpty.hidden = rows.length > 0;
+  for (const row of rows) {
+    const tr = document.createElement("tr");
+    tr.appendChild(cell(fmtDate(row.created_at)));
+    const ratingTd = cell(row.rating === "up" ? "\u{1F44D} up" : "\u{1F44E} down");
+    ratingTd.className = row.rating === "up" ? "rating-up" : "rating-down";
+    tr.appendChild(ratingTd);
+    tr.appendChild(cell(row.message));
+    tr.appendChild(cell(row.answer));
+    feedbackBody.appendChild(tr);
+  }
+}
+
+function renderContact(rows) {
+  contactBody.innerHTML = "";
+  contactCount.textContent = rows.length ? rows.length + " row(s)" : "";
+  contactEmpty.hidden = rows.length > 0;
+  for (const row of rows) {
+    const tr = document.createElement("tr");
+    tr.appendChild(cell(fmtDate(row.created_at)));
+    tr.appendChild(cell(row.reason));
+    tr.appendChild(cell(row.message));
+    tr.appendChild(cell(row.email || "—"));
+    contactBody.appendChild(tr);
+  }
+}
+
+async function loadData(secret) {
+  authStatus.textContent = "Loading…";
+  authStatus.className = "";
+  try {
+    const res = await fetch(BACKEND_URL + "/api/admin/feedback", {
+      headers: { "x-ingest-secret": secret },
+    });
+    if (res.status === 401) {
+      authStatus.textContent = "D'oh! That secret was rejected. Double-check it and try again.";
+      authStatus.className = "error";
+      return;
+    }
+    if (!res.ok) throw new Error("Request failed with status " + res.status);
+    const data = await res.json();
+    renderFeedback(data.feedback || []);
+    renderContact(data.contact || []);
+    authStatus.textContent = "Loaded successfully.";
+    authStatus.className = "success";
+    localStorage.setItem(STORAGE_KEY, secret);
+  } catch (err) {
+    authStatus.textContent = "D'oh! Something went wrong reaching the backend. Try again in a bit.";
+    authStatus.className = "error";
+  }
+}
+
+authForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const secret = secretInput.value.trim();
+  if (!secret) {
+    authStatus.textContent = "Please enter the secret.";
+    authStatus.className = "error";
+    return;
+  }
+  loadData(secret);
+});
+
+forgetBtn.addEventListener("click", () => {
+  localStorage.removeItem(STORAGE_KEY);
+  secretInput.value = "";
+  authStatus.textContent = "Saved secret cleared.";
+  authStatus.className = "";
+});
+
+// Convenience only -- re-fetches with whatever was last saved in this
+// browser so you don't have to retype the secret on every visit.
+(function tryAutoLoad() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      secretInput.value = saved;
+      loadData(saved);
+    }
+  } catch (e) {
+    // localStorage unavailable (private browsing, etc.) -- just skip autoload.
+  }
+})();
+</script>
+</body>
+</html>
