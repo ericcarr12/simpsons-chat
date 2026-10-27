@@ -49,7 +49,7 @@ characters, built from Wikisimpsons via a scrape-and-enrich pipeline, plus a
 small hand-curated set for the core cast and frequently-asked facts.
 
 Alongside that, D1 tracks structured producer credits and character
-appearances for all **811** broadcast episodes, which power the exact-answer
+appearances for all **813** broadcast episodes, which power the exact-answer
 lookups described above (complete producer/writer lists, full "which
 episodes feature X" results, and curated episode-count write-ups for Homer,
 Marge, Bart, Lisa, and Maggie). See `simpsons-backend/README.md` for how the

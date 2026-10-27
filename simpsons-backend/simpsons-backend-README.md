@@ -84,7 +84,7 @@ Batches API enrichment pass that generated quotes and longer summaries for
 each entry.
 
 Separately, `episode_producers` and `episode_characters` hold structured,
-per-episode producer credits and character appearances for all **811**
+per-episode producer credits and character appearances for all **813**
 broadcast episodes (reconciled against the current real episode count as of
 August 2026). These are what the deterministic lookups above query — not
 the `entries` table, and not Vectorize.

@@ -288,7 +288,7 @@ async function findCharacterName(env, rawName) {
 // count/exception logic below for Homer specifically.
 const HOMER_EVERY_EPISODE_ANSWER = {
   answer:
-    `Homer Simpson has appeared in every one of the 811 episodes of The Simpsons! He is the only character to have spoken dialog in every regular broadcast episode of the series. He is the most-featured Simpson with over 350 specific episodes centering directly around his storylines and jobs.\n\n` +
+    `Homer Simpson has appeared in every one of the 813 episodes of The Simpsons! He is the only character to have spoken dialog in every regular broadcast episode of the series. He is the most-featured Simpson with over 350 specific episodes centering directly around his storylines and jobs.\n\n` +
     `The episode "The Road to Cincinnati", which focused entirely on a road trip buddy comedy with Principal Skinner and Superintendent Chalmers driving 800 miles to a convention, almost broke Dan Castellaneta's record of having a speaking line in every episode of the Simpsons. But Homer ultimately appeared in the post-credits scene saying "I went to work. Lenny had a cold, so he wasn't there. Carl was there though.", keeping the record intact.`,
   sources: [{ title: "Homer Simpson", source: "episode_characters", url: null }],
 };
@@ -515,6 +515,62 @@ function logQuestion(env, ctx, source) {
   if (ctx) ctx.waitUntil(write);
 }
 
+// ---------- Episode-title matching ----------
+// Bare queries like "Treehouse of Horror XXXVII" embed close to many sibling
+// entries (XXVII, XXXII, XXXV...), so the right episode can miss the top-K.
+// If the message contains an episode/segment title verbatim, pull that entry
+// straight from D1 and put it first in the context.
+let episodeTitleIndex = null;
+let episodeTitleIndexAt = 0;
+const EPISODE_TITLE_INDEX_TTL_MS = 10 * 60 * 1000;
+
+function normalizeTitleForMatch(text) {
+  return String(text)
+    .toLowerCase()
+    .replace(/['\u2019]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+async function loadEpisodeTitleIndex(env) {
+  const now = Date.now();
+  if (episodeTitleIndex && now - episodeTitleIndexAt < EPISODE_TITLE_INDEX_TTL_MS) {
+    return episodeTitleIndex;
+  }
+  const { results } = await env.DB.prepare(
+    "SELECT id, title FROM entries WHERE id GLOB 's[0-9]*e[0-9]*-*'"
+  ).all();
+  episodeTitleIndex = (results || [])
+    .map((r) => {
+      const base = r.title.split(" (")[0];
+      return { id: r.id, norm: normalizeTitleForMatch(base) };
+    })
+    .filter((r) => r.norm.length >= 10);
+  episodeTitleIndexAt = now;
+  return episodeTitleIndex;
+}
+
+async function findEpisodeTitleMatches(message, env, limit = 2) {
+  try {
+    const haystack = " " + normalizeTitleForMatch(message) + " ";
+    const index = await loadEpisodeTitleIndex(env);
+    const hits = index
+      .filter((r) => haystack.includes(" " + r.norm + " "))
+      .sort((a, b) => b.norm.length - a.norm.length)
+      .slice(0, limit);
+    if (hits.length === 0) return [];
+    const placeholders = hits.map(() => "?").join(",");
+    const { results } = await env.DB.prepare(
+      `SELECT id, title, text, source, url FROM entries WHERE id IN (${placeholders})`
+    )
+      .bind(...hits.map((h) => h.id))
+      .all();
+    return results || [];
+  } catch {
+    return []; // never let this optimization break the normal path
+  }
+}
+
 async function handleChat(request, env, ctx) {
   const allowed = await rateLimit(env, request);
   if (!allowed) {
@@ -560,7 +616,17 @@ async function handleChat(request, env, ctx) {
     returnMetadata: true,
   });
 
-  const contextEntries = (matches.matches || []).filter((m) => m.score > 0.4);
+  const vectorEntries = (matches.matches || []).filter((m) => m.score > 0.4);
+  const titleMatches = await findEpisodeTitleMatches(message, env);
+
+  // Title matches go first; then the vector results, skipping duplicates.
+  const contextEntries = [
+    ...titleMatches.map((r) => ({
+      id: r.id,
+      metadata: { title: r.title, text: r.text, source: r.source, url: r.url },
+    })),
+    ...vectorEntries.filter((m) => !titleMatches.some((r) => r.id === m.id)),
+  ];
 
   if (contextEntries.length === 0) {
     logQuestion(env, ctx, "no_match");
